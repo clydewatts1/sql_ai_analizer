@@ -8,7 +8,11 @@ main_analysis: |
   1. Examine the user's SQL to identify the primary objects (tables and views).
   2. For each object you need to know more about, use the `get_object_ddl` function to retrieve its schema.
   3. Once you have all the necessary schemas, perform the full data lineage analysis.
-  4. Finally, respond with a single JSON object containing two keys: "mappings" and "diagram", with the same structure as you have done previously. Do not respond with a function call in your final answer.
+  4. Include in your analysis:
+     - A detailed mapping of source columns to target columns.
+     - Include any transformations applied to the data.
+     - Include Comments from the DDL in your analysis.
+  5. Finally, respond with a single JSON object containing two keys: "mappings" and "diagram", with the same structure as you have done previously. Do not respond with a function call in your final answer.
 
   USER'S SQL TO ANALYZE:
   ```sql

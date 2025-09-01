@@ -1,4 +1,4 @@
-google-generativeai>=2.0.0
+google-genai>=2.0.0
 teradatasql
 sqlfluff
 pyyaml

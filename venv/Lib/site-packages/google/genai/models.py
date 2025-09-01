@@ -21,6 +21,7 @@ from typing import Any, AsyncIterator, Awaitable, Iterator, Optional, Union
 from urllib.parse import urlencode
 
 from . import _api_module
+from . import _base_transformers as base_t
 from . import _common
 from . import _extra_utils
 from . import _mcp_utils
@@ -1260,11 +1261,34 @@ def _Image_to_mldev(
     setv(
         to_object,
         ['bytesBase64Encoded'],
-        t.t_bytes(getv(from_object, ['image_bytes'])),
+        base_t.t_bytes(getv(from_object, ['image_bytes'])),
     )
 
   if getv(from_object, ['mime_type']) is not None:
     setv(to_object, ['mimeType'], getv(from_object, ['mime_type']))
+
+  return to_object
+
+
+def _GenerateVideosSource_to_mldev(
+    from_object: Union[dict[str, Any], object],
+    parent_object: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+  to_object: dict[str, Any] = {}
+  if getv(from_object, ['prompt']) is not None:
+    setv(
+        parent_object, ['instances[0]', 'prompt'], getv(from_object, ['prompt'])
+    )
+
+  if getv(from_object, ['image']) is not None:
+    setv(
+        parent_object,
+        ['instances[0]', 'image'],
+        _Image_to_mldev(getv(from_object, ['image']), to_object),
+    )
+
+  if getv(from_object, ['video']) is not None:
+    raise ValueError('video parameter is not supported in Gemini API.')
 
   return to_object
 
@@ -1376,6 +1400,15 @@ def _GenerateVideosParameters_to_mldev(
 
   if getv(from_object, ['video']) is not None:
     raise ValueError('video parameter is not supported in Gemini API.')
+
+  if getv(from_object, ['source']) is not None:
+    setv(
+        to_object,
+        ['config'],
+        _GenerateVideosSource_to_mldev(
+            getv(from_object, ['source']), to_object
+        ),
+    )
 
   if getv(from_object, ['config']) is not None:
     setv(
@@ -2502,7 +2535,7 @@ def _Image_to_vertex(
     setv(
         to_object,
         ['bytesBase64Encoded'],
-        t.t_bytes(getv(from_object, ['image_bytes'])),
+        base_t.t_bytes(getv(from_object, ['image_bytes'])),
     )
 
   if getv(from_object, ['mime_type']) is not None:
@@ -2797,6 +2830,13 @@ def _UpscaleImageAPIConfig_to_vertex(
 ) -> dict[str, Any]:
   to_object: dict[str, Any] = {}
 
+  if getv(from_object, ['output_gcs_uri']) is not None:
+    setv(
+        parent_object,
+        ['parameters', 'storageUri'],
+        getv(from_object, ['output_gcs_uri']),
+    )
+
   if getv(from_object, ['include_rai_reason']) is not None:
     setv(
         parent_object,
@@ -2971,6 +3011,13 @@ def _RecontextImageConfig_to_vertex(
         parent_object,
         ['parameters', 'personGeneration'],
         getv(from_object, ['person_generation']),
+    )
+
+  if getv(from_object, ['add_watermark']) is not None:
+    setv(
+        parent_object,
+        ['parameters', 'addWatermark'],
+        getv(from_object, ['add_watermark']),
     )
 
   if getv(from_object, ['output_mime_type']) is not None:
@@ -3387,11 +3434,38 @@ def _Video_to_vertex(
     setv(
         to_object,
         ['bytesBase64Encoded'],
-        t.t_bytes(getv(from_object, ['video_bytes'])),
+        base_t.t_bytes(getv(from_object, ['video_bytes'])),
     )
 
   if getv(from_object, ['mime_type']) is not None:
     setv(to_object, ['mimeType'], getv(from_object, ['mime_type']))
+
+  return to_object
+
+
+def _GenerateVideosSource_to_vertex(
+    from_object: Union[dict[str, Any], object],
+    parent_object: Optional[dict[str, Any]] = None,
+) -> dict[str, Any]:
+  to_object: dict[str, Any] = {}
+  if getv(from_object, ['prompt']) is not None:
+    setv(
+        parent_object, ['instances[0]', 'prompt'], getv(from_object, ['prompt'])
+    )
+
+  if getv(from_object, ['image']) is not None:
+    setv(
+        parent_object,
+        ['instances[0]', 'image'],
+        _Image_to_vertex(getv(from_object, ['image']), to_object),
+    )
+
+  if getv(from_object, ['video']) is not None:
+    setv(
+        parent_object,
+        ['instances[0]', 'video'],
+        _Video_to_vertex(getv(from_object, ['video']), to_object),
+    )
 
   return to_object
 
@@ -3551,6 +3625,15 @@ def _GenerateVideosParameters_to_vertex(
         to_object,
         ['instances[0]', 'video'],
         _Video_to_vertex(getv(from_object, ['video']), to_object),
+    )
+
+  if getv(from_object, ['source']) is not None:
+    setv(
+        to_object,
+        ['config'],
+        _GenerateVideosSource_to_vertex(
+            getv(from_object, ['source']), to_object
+        ),
     )
 
   if getv(from_object, ['config']) is not None:
@@ -3914,7 +3997,7 @@ def _Image_from_mldev(
     setv(
         to_object,
         ['image_bytes'],
-        t.t_bytes(getv(from_object, ['bytesBase64Encoded'])),
+        base_t.t_bytes(getv(from_object, ['bytesBase64Encoded'])),
     )
 
   if getv(from_object, ['mimeType']) is not None:
@@ -4101,6 +4184,10 @@ def _DeleteModelResponse_from_mldev(
     parent_object: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
   to_object: dict[str, Any] = {}
+  if getv(from_object, ['sdkHttpResponse']) is not None:
+    setv(
+        to_object, ['sdk_http_response'], getv(from_object, ['sdkHttpResponse'])
+    )
 
   return to_object
 
@@ -4140,7 +4227,7 @@ def _Video_from_mldev(
     setv(
         to_object,
         ['video_bytes'],
-        t.t_bytes(getv(from_object, ['video', 'encodedVideo'])),
+        base_t.t_bytes(getv(from_object, ['video', 'encodedVideo'])),
     )
 
   if getv(from_object, ['encoding']) is not None:
@@ -4606,7 +4693,7 @@ def _Image_from_vertex(
     setv(
         to_object,
         ['image_bytes'],
-        t.t_bytes(getv(from_object, ['bytesBase64Encoded'])),
+        base_t.t_bytes(getv(from_object, ['bytesBase64Encoded'])),
     )
 
   if getv(from_object, ['mimeType']) is not None:
@@ -4968,6 +5055,10 @@ def _DeleteModelResponse_from_vertex(
     parent_object: Optional[dict[str, Any]] = None,
 ) -> dict[str, Any]:
   to_object: dict[str, Any] = {}
+  if getv(from_object, ['sdkHttpResponse']) is not None:
+    setv(
+        to_object, ['sdk_http_response'], getv(from_object, ['sdkHttpResponse'])
+    )
 
   return to_object
 
@@ -5016,7 +5107,7 @@ def _Video_from_vertex(
     setv(
         to_object,
         ['video_bytes'],
-        t.t_bytes(getv(from_object, ['bytesBase64Encoded'])),
+        base_t.t_bytes(getv(from_object, ['bytesBase64Encoded'])),
     )
 
   if getv(from_object, ['mimeType']) is not None:
@@ -6050,7 +6141,9 @@ class Models(_api_module.BaseModule):
     return_value = types.DeleteModelResponse._from_response(
         response=response_dict, kwargs=parameter_model.model_dump()
     )
-
+    return_value.sdk_http_response = types.HttpResponse(
+        headers=response.headers
+    )
     self._api_client._verify_response(return_value)
     return return_value
 
@@ -6235,6 +6328,7 @@ class Models(_api_module.BaseModule):
       prompt: Optional[str] = None,
       image: Optional[types.ImageOrDict] = None,
       video: Optional[types.VideoOrDict] = None,
+      source: Optional[types.GenerateVideosSourceOrDict] = None,
       config: Optional[types.GenerateVideosConfigOrDict] = None,
   ) -> types.GenerateVideosOperation:
     """Generates videos based on an input (text, image, or video) and configuration.
@@ -6276,6 +6370,7 @@ class Models(_api_module.BaseModule):
         prompt=prompt,
         image=image,
         video=video,
+        source=source,
         config=config,
     )
 
@@ -6794,6 +6889,7 @@ class Models(_api_module.BaseModule):
       config_dct = dict(config)
     api_config = types._UpscaleImageAPIConfigDict(
         http_options=config_dct.get('http_options', None),
+        output_gcs_uri=config_dct.get('output_gcs_uri', None),
         include_rai_reason=config_dct.get('include_rai_reason', None),
         output_mime_type=config_dct.get('output_mime_type', None),
         output_compression_quality=config_dct.get(
@@ -6823,6 +6919,7 @@ class Models(_api_module.BaseModule):
       prompt: Optional[str] = None,
       image: Optional[types.ImageOrDict] = None,
       video: Optional[types.VideoOrDict] = None,
+      source: Optional[types.GenerateVideosSourceOrDict] = None,
       config: Optional[types.GenerateVideosConfigOrDict] = None,
   ) -> types.GenerateVideosOperation:
     """Generates videos based on an input (text, image, or video) and configuration.
@@ -6837,11 +6934,15 @@ class Models(_api_module.BaseModule):
     Args:
       model: The model to use.
       prompt: The text prompt for generating the videos. Optional for image to
-        video and video extension use cases.
+        video and video extension use cases. This argument is deprecated, please
+        use source instead.
       image: The input image for generating the videos. Optional if prompt is
-        provided.
+        provided. This argument is deprecated, please use source instead.
       video: The input video for video extension use cases. Optional if prompt
-        or image is provided.
+        or image is provided. This argument is deprecated, please use source
+        instead.
+      source: The input source for generating the videos (prompt, image, and/or
+        video)
       config: Configuration for generation.
 
     Usage:
@@ -6849,7 +6950,9 @@ class Models(_api_module.BaseModule):
       ```
       operation = client.models.generate_videos(
           model="veo-2.0-generate-001",
-          prompt="A neon hologram of a cat driving at top speed",
+          source=types.GenerateVideosSource(
+              prompt="A neon hologram of a cat driving at top speed",
+          ),
       )
       while not operation.done:
           time.sleep(10)
@@ -6858,11 +6961,17 @@ class Models(_api_module.BaseModule):
       operation.result.generated_videos[0].video.uri
       ```
     """
+    if (prompt or image or video) and source:
+      raise ValueError(
+          'Source and prompt/image/video are mutually exclusive.'
+          + ' Please only use source.'
+      )
     return self._generate_videos(
         model=model,
         prompt=prompt,
         image=image,
         video=video,
+        source=source,
         config=config,
     )
 
@@ -7869,7 +7978,9 @@ class AsyncModels(_api_module.BaseModule):
     return_value = types.DeleteModelResponse._from_response(
         response=response_dict, kwargs=parameter_model.model_dump()
     )
-
+    return_value.sdk_http_response = types.HttpResponse(
+        headers=response.headers
+    )
     self._api_client._verify_response(return_value)
     return return_value
 
@@ -8053,6 +8164,7 @@ class AsyncModels(_api_module.BaseModule):
       prompt: Optional[str] = None,
       image: Optional[types.ImageOrDict] = None,
       video: Optional[types.VideoOrDict] = None,
+      source: Optional[types.GenerateVideosSourceOrDict] = None,
       config: Optional[types.GenerateVideosConfigOrDict] = None,
   ) -> types.GenerateVideosOperation:
     """Generates videos based on an input (text, image, or video) and configuration.
@@ -8094,6 +8206,7 @@ class AsyncModels(_api_module.BaseModule):
         prompt=prompt,
         image=image,
         video=video,
+        source=source,
         config=config,
     )
 
@@ -8645,6 +8758,7 @@ class AsyncModels(_api_module.BaseModule):
       config_dct = dict(config)
     api_config = types._UpscaleImageAPIConfigDict(
         http_options=config_dct.get('http_options', None),
+        output_gcs_uri=config_dct.get('output_gcs_uri', None),
         include_rai_reason=config_dct.get('include_rai_reason', None),
         output_mime_type=config_dct.get('output_mime_type', None),
         output_compression_quality=config_dct.get(
@@ -8674,6 +8788,7 @@ class AsyncModels(_api_module.BaseModule):
       prompt: Optional[str] = None,
       image: Optional[types.ImageOrDict] = None,
       video: Optional[types.VideoOrDict] = None,
+      source: Optional[types.GenerateVideosSourceOrDict] = None,
       config: Optional[types.GenerateVideosConfigOrDict] = None,
   ) -> types.GenerateVideosOperation:
     """Generates videos based on an input (text, image, or video) and configuration.
@@ -8688,11 +8803,15 @@ class AsyncModels(_api_module.BaseModule):
     Args:
       model: The model to use.
       prompt: The text prompt for generating the videos. Optional for image to
-        video and video extension use cases.
+        video and video extension use cases. This argument is deprecated, please
+        use source instead.
       image: The input image for generating the videos. Optional if prompt is
-        provided.
+        provided. This argument is deprecated, please use source instead.
       video: The input video for video extension use cases. Optional if prompt
-        or image is provided.
+        or image is provided. This argument is deprecated, please use source
+        instead.
+      source: The input source for generating the videos (prompt, image, and/or
+        video)
       config: Configuration for generation.
 
     Usage:
@@ -8700,7 +8819,9 @@ class AsyncModels(_api_module.BaseModule):
       ```
       operation = client.models.generate_videos(
           model="veo-2.0-generate-001",
-          prompt="A neon hologram of a cat driving at top speed",
+          source=types.GenerateVideosSource(
+              prompt="A neon hologram of a cat driving at top speed",
+          ),
       )
       while not operation.done:
           time.sleep(10)
@@ -8709,10 +8830,16 @@ class AsyncModels(_api_module.BaseModule):
       operation.result.generated_videos[0].video.uri
       ```
     """
+    if (prompt or image or video) and source:
+      raise ValueError(
+          'Source and prompt/image/video are mutually exclusive.'
+          + ' Please only use source.'
+      )
     return await self._generate_videos(
         model=model,
         prompt=prompt,
         image=image,
         video=video,
+        source=source,
         config=config,
     )

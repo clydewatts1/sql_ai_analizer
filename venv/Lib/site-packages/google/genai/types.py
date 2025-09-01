@@ -19,6 +19,7 @@ from abc import ABC, abstractmethod
 import datetime
 from enum import Enum, EnumMeta
 import inspect
+import io
 import json
 import logging
 import sys
@@ -29,6 +30,11 @@ import pydantic
 from pydantic import ConfigDict, Field, PrivateAttr, model_validator
 from typing_extensions import Self, TypedDict
 from . import _common
+from ._operations_converters import (
+    _GenerateVideosOperation_from_mldev,
+    _GenerateVideosOperation_from_vertex,
+)
+
 
 if sys.version_info >= (3, 10):
   # Supports both Union[t1, t2] and t1 | t2
@@ -496,6 +502,8 @@ class FunctionCallingConfigMode(_common.CaseInSensitiveEnum):
   """Model is constrained to always predicting function calls only. If "allowed_function_names" are set, the predicted function calls will be limited to any one of "allowed_function_names", else the predicted function calls will be any one of the provided "function_declarations"."""
   NONE = 'NONE'
   """Model will not predict any function calls. Model behavior is same as when not passing any function declarations."""
+  VALIDATED = 'VALIDATED'
+  """Model decides to predict either a function call or a natural language response, but will validate function calls with constrained decoding. If "allowed_function_names" are set, the predicted function call will be limited to any one of "allowed_function_names", else the predicted function call will be any one of the provided "function_declarations"."""
 
 
 class SafetyFilterLevel(_common.CaseInSensitiveEnum):
@@ -588,6 +596,18 @@ class SegmentMode(_common.CaseInSensitiveEnum):
   PROMPT = 'PROMPT'
   SEMANTIC = 'SEMANTIC'
   INTERACTIVE = 'INTERACTIVE'
+
+
+class VideoGenerationReferenceType(_common.CaseInSensitiveEnum):
+  """Enum for the reference type of a video generation reference image."""
+
+  ASSET = 'ASSET'
+  """A reference image that provides assets to the generated video,
+      such as the scene, an object, a character, etc."""
+  STYLE = 'STYLE'
+  """A reference image that provides aesthetics including colors,
+      lighting, texture, etc., to be used as the style of the generated video,
+      such as 'anime', 'photography', 'origami', etc."""
 
 
 class VideoCompressionQuality(_common.CaseInSensitiveEnum):
@@ -803,6 +823,21 @@ class Blob(_common.BaseModel):
       default=None,
       description="""Required. The IANA standard MIME type of the source data.""",
   )
+
+  def as_image(self) -> Optional['PIL_Image']:
+    """Returns the Blob as a PIL Image, or None if the Blob is not an image."""
+    if (
+        not self.data
+        or not self.mime_type
+        or not self.mime_type.startswith('image/')
+    ):
+      return None
+    if not _is_pillow_image_imported:
+      raise ImportError(
+          'The PIL module is not available. Please install the Pillow'
+          ' package. `pip install pillow`'
+      )
+    return PIL.Image.open(io.BytesIO(self.data))
 
 
 class BlobDict(TypedDict, total=False):
@@ -1062,6 +1097,12 @@ class Part(_common.BaseModel):
   text: Optional[str] = Field(
       default=None, description="""Optional. Text part (can be code)."""
   )
+
+  def as_image(self) -> Optional['PIL_Image']:
+    """Returns the part as a PIL Image, or None if the part is not an image."""
+    if not self.inline_data:
+      return None
+    return self.inline_data.as_image()
 
   @classmethod
   def from_uri(
@@ -5447,6 +5488,23 @@ class GenerateContentResponse(_common.BaseModel):
     return text if any_text_part_text else None
 
   @property
+  def parts(self) -> Optional[list[Part]]:
+    """Returns the content-parts in the response."""
+    if (
+        not self.candidates
+        or self.candidates[0].content is None
+        or self.candidates[0].content.parts is None
+    ):
+      return None
+    if len(self.candidates) > 1:
+      logger.warning(
+          'Warning: there are multiple candidates in the response, returning'
+          ' parts from the first one.'
+      )
+
+    return self.candidates[0].content.parts
+
+  @property
   def text(self) -> Optional[str]:
     """Returns the concatenation of all text parts in the response."""
     return self._get_text(warn_property='text')
@@ -6854,6 +6912,10 @@ class _UpscaleImageAPIConfig(_common.BaseModel):
   http_options: Optional[HttpOptions] = Field(
       default=None, description="""Used to override HTTP request options."""
   )
+  output_gcs_uri: Optional[str] = Field(
+      default=None,
+      description="""Cloud Storage URI used to store the generated images.""",
+  )
   include_rai_reason: Optional[bool] = Field(
       default=None,
       description="""Whether to include a reason for filtered-out images in the
@@ -6894,6 +6956,9 @@ class _UpscaleImageAPIConfigDict(TypedDict, total=False):
 
   http_options: Optional[HttpOptionsDict]
   """Used to override HTTP request options."""
+
+  output_gcs_uri: Optional[str]
+  """Cloud Storage URI used to store the generated images."""
 
   include_rai_reason: Optional[bool]
   """Whether to include a reason for filtered-out images in the
@@ -7078,6 +7143,10 @@ class RecontextImageConfig(_common.BaseModel):
       description="""Whether allow to generate person images, and restrict to specific
       ages.""",
   )
+  add_watermark: Optional[bool] = Field(
+      default=None,
+      description="""Whether to add a SynthID watermark to the generated images.""",
+  )
   output_mime_type: Optional[str] = Field(
       default=None, description="""MIME type of the generated image."""
   )
@@ -7116,6 +7185,9 @@ class RecontextImageConfigDict(TypedDict, total=False):
   person_generation: Optional[PersonGeneration]
   """Whether allow to generate person images, and restrict to specific
       ages."""
+
+  add_watermark: Optional[bool]
+  """Whether to add a SynthID watermark to the generated images."""
 
   output_mime_type: Optional[str]
   """MIME type of the generated image."""
@@ -7828,12 +7900,15 @@ _DeleteModelParametersOrDict = Union[
 
 class DeleteModelResponse(_common.BaseModel):
 
-  pass
+  sdk_http_response: Optional[HttpResponse] = Field(
+      default=None, description="""Used to retain the full HTTP response."""
+  )
 
 
 class DeleteModelResponseDict(TypedDict, total=False):
 
-  pass
+  sdk_http_response: Optional[HttpResponseDict]
+  """Used to retain the full HTTP response."""
 
 
 DeleteModelResponseOrDict = Union[DeleteModelResponse, DeleteModelResponseDict]
@@ -8198,7 +8273,7 @@ class TokensInfo(_common.BaseModel):
 
   role: Optional[str] = Field(
       default=None,
-      description="""Optional. Optional fields for the role from the corresponding Content.""",
+      description="""Optional fields for the role from the corresponding Content.""",
   )
   token_ids: Optional[list[int]] = Field(
       default=None, description="""A list of token ids from the input."""
@@ -8212,7 +8287,7 @@ class TokensInfoDict(TypedDict, total=False):
   """Tokens info with a list of tokens and the corresponding list of token ids."""
 
   role: Optional[str]
-  """Optional. Optional fields for the role from the corresponding Content."""
+  """Optional fields for the role from the corresponding Content."""
 
   token_ids: Optional[list[int]]
   """A list of token ids from the input."""
@@ -8354,6 +8429,47 @@ class VideoDict(TypedDict, total=False):
 VideoOrDict = Union[Video, VideoDict]
 
 
+class GenerateVideosSource(_common.BaseModel):
+  """A set of source input(s) for video generation."""
+
+  prompt: Optional[str] = Field(
+      default=None,
+      description="""The text prompt for generating the videos.
+      Optional if image or video is provided.""",
+  )
+  image: Optional[Image] = Field(
+      default=None,
+      description="""The input image for generating the videos.
+      Optional if prompt or video is provided.""",
+  )
+  video: Optional[Video] = Field(
+      default=None,
+      description="""The input video for video extension use cases.
+      Optional if prompt or image is provided.""",
+  )
+
+
+class GenerateVideosSourceDict(TypedDict, total=False):
+  """A set of source input(s) for video generation."""
+
+  prompt: Optional[str]
+  """The text prompt for generating the videos.
+      Optional if image or video is provided."""
+
+  image: Optional[ImageDict]
+  """The input image for generating the videos.
+      Optional if prompt or video is provided."""
+
+  video: Optional[VideoDict]
+  """The input video for video extension use cases.
+      Optional if prompt or image is provided."""
+
+
+GenerateVideosSourceOrDict = Union[
+    GenerateVideosSource, GenerateVideosSourceDict
+]
+
+
 class VideoGenerationReferenceImage(_common.BaseModel):
   """A reference image for video generation."""
 
@@ -8362,11 +8478,10 @@ class VideoGenerationReferenceImage(_common.BaseModel):
       description="""The reference image.
       """,
   )
-  reference_type: Optional[str] = Field(
+  reference_type: Optional[VideoGenerationReferenceType] = Field(
       default=None,
       description="""The type of the reference image, which defines how the reference
-      image will be used to generate the video. Supported values are 'asset'
-      or 'style'.""",
+      image will be used to generate the video.""",
   )
 
 
@@ -8377,10 +8492,9 @@ class VideoGenerationReferenceImageDict(TypedDict, total=False):
   """The reference image.
       """
 
-  reference_type: Optional[str]
+  reference_type: Optional[VideoGenerationReferenceType]
   """The type of the reference image, which defines how the reference
-      image will be used to generate the video. Supported values are 'asset'
-      or 'style'."""
+      image will be used to generate the video."""
 
 
 VideoGenerationReferenceImageOrDict = Union[
@@ -8540,6 +8654,10 @@ class _GenerateVideosParameters(_common.BaseModel):
       description="""The input video for video extension use cases.
       Optional if prompt or image is provided.""",
   )
+  source: Optional[GenerateVideosSource] = Field(
+      default=None,
+      description="""A set of source input(s) for video generation.""",
+  )
   config: Optional[GenerateVideosConfig] = Field(
       default=None, description="""Configuration for generating videos."""
   )
@@ -8562,6 +8680,9 @@ class _GenerateVideosParametersDict(TypedDict, total=False):
   video: Optional[VideoDict]
   """The input video for video extension use cases.
       Optional if prompt or image is provided."""
+
+  source: Optional[GenerateVideosSourceDict]
+  """A set of source input(s) for video generation."""
 
   config: Optional[GenerateVideosConfigDict]
   """Configuration for generating videos."""
@@ -8605,6 +8726,24 @@ class GenerateVideosResponse(_common.BaseModel):
   )
 
 
+class GenerateVideosResponseDict(TypedDict, total=False):
+  """Response with generated videos."""
+
+  generated_videos: Optional[list[GeneratedVideoDict]]
+  """List of the generated videos"""
+
+  rai_media_filtered_count: Optional[int]
+  """Returns if any videos were filtered due to RAI policies."""
+
+  rai_media_filtered_reasons: Optional[list[str]]
+  """Returns rai failure reasons if any."""
+
+
+GenerateVideosResponseOrDict = Union[
+    GenerateVideosResponse, GenerateVideosResponseDict
+]
+
+
 class Operation(ABC):
   """A long-running operation."""
 
@@ -8640,7 +8779,6 @@ class GenerateVideosOperation(_common.BaseModel, Operation):
   response: Optional[GenerateVideosResponse] = Field(
       default=None, description="""The generated videos."""
   )
-
   result: Optional[GenerateVideosResponse] = Field(
       default=None, description="""The generated videos."""
   )
@@ -8650,76 +8788,12 @@ class GenerateVideosOperation(_common.BaseModel, Operation):
       cls, api_response: Any, is_vertex_ai: bool = False
   ) -> Self:
     """Instantiates a GenerateVideosOperation from an API response."""
-    new_operation = cls()
-    new_operation.name = api_response.get('name', None)
-    new_operation.metadata = api_response.get('metadata', None)
-    new_operation.done = api_response.get('done', None)
-    new_operation.error = api_response.get('error', None)
-
     if is_vertex_ai:
-      if api_response.get('response', None) is not None:
-        new_operation.response = GenerateVideosResponse(
-            generated_videos=[
-                GeneratedVideo(
-                    video=Video(
-                        uri=video.get('gcsUri', None),
-                        video_bytes=video.get('bytesBase64Encoded', None),
-                        mime_type=video.get('mimeType', None),
-                    )
-                )
-                for video in api_response.get('response', {}).get('videos', [])
-            ],
-            rai_media_filtered_count=api_response.get('response', {}).get(
-                'raiMediaFilteredCount', None
-            ),
-            rai_media_filtered_reasons=api_response.get('response', {}).get(
-                'raiMediaFilteredReasons', None
-            ),
-        )
+      response_dict = _GenerateVideosOperation_from_vertex(api_response)
     else:
-      if api_response.get('response', None) is not None:
-        new_operation.response = GenerateVideosResponse(
-            generated_videos=[
-                GeneratedVideo(
-                    video=Video(
-                        uri=video.get('video', {}).get('uri', None),
-                        video_bytes=video.get('video', {}).get(
-                            'encodedVideo', None
-                        ),
-                        mime_type=video.get('encoding', None),
-                    )
-                )
-                for video in api_response.get('response', {})
-                .get('generateVideoResponse', {})
-                .get('generatedSamples', [])
-            ],
-            rai_media_filtered_count=api_response.get('response', {})
-            .get('generateVideoResponse', {})
-            .get('raiMediaFilteredCount', None),
-            rai_media_filtered_reasons=api_response.get('response', {})
-            .get('generateVideoResponse', {})
-            .get('raiMediaFilteredReasons', None),
-        )
-    new_operation.result = new_operation.response
-    return new_operation
+      response_dict = _GenerateVideosOperation_from_mldev(api_response)
 
-
-class GenerateVideosResponseDict(TypedDict, total=False):
-  """Response with generated videos."""
-
-  generated_videos: Optional[list[GeneratedVideoDict]]
-  """List of the generated videos"""
-
-  rai_media_filtered_count: Optional[int]
-  """Returns if any videos were filtered due to RAI policies."""
-
-  rai_media_filtered_reasons: Optional[list[str]]
-  """Returns rai failure reasons if any."""
-
-
-GenerateVideosResponseOrDict = Union[
-    GenerateVideosResponse, GenerateVideosResponseDict
-]
+    return cls._from_response(response=response_dict, kwargs={})
 
 
 class GetTuningJobConfig(_common.BaseModel):
@@ -10193,6 +10267,52 @@ ListTuningJobsResponseOrDict = Union[
 ]
 
 
+class CancelTuningJobConfig(_common.BaseModel):
+  """Optional parameters for tunings.cancel method."""
+
+  http_options: Optional[HttpOptions] = Field(
+      default=None, description="""Used to override HTTP request options."""
+  )
+
+
+class CancelTuningJobConfigDict(TypedDict, total=False):
+  """Optional parameters for tunings.cancel method."""
+
+  http_options: Optional[HttpOptionsDict]
+  """Used to override HTTP request options."""
+
+
+CancelTuningJobConfigOrDict = Union[
+    CancelTuningJobConfig, CancelTuningJobConfigDict
+]
+
+
+class _CancelTuningJobParameters(_common.BaseModel):
+  """Parameters for the cancel method."""
+
+  name: Optional[str] = Field(
+      default=None, description="""The resource name of the tuning job."""
+  )
+  config: Optional[CancelTuningJobConfig] = Field(
+      default=None, description="""Optional parameters for the request."""
+  )
+
+
+class _CancelTuningJobParametersDict(TypedDict, total=False):
+  """Parameters for the cancel method."""
+
+  name: Optional[str]
+  """The resource name of the tuning job."""
+
+  config: Optional[CancelTuningJobConfigDict]
+  """Optional parameters for the request."""
+
+
+_CancelTuningJobParametersOrDict = Union[
+    _CancelTuningJobParameters, _CancelTuningJobParametersDict
+]
+
+
 class TuningExample(_common.BaseModel):
 
   text_input: Optional[str] = Field(
@@ -10797,13 +10917,16 @@ _DeleteCachedContentParametersOrDict = Union[
 class DeleteCachedContentResponse(_common.BaseModel):
   """Empty response for caches.delete method."""
 
-  pass
+  sdk_http_response: Optional[HttpResponse] = Field(
+      default=None, description="""Used to retain the full HTTP response."""
+  )
 
 
 class DeleteCachedContentResponseDict(TypedDict, total=False):
   """Empty response for caches.delete method."""
 
-  pass
+  sdk_http_response: Optional[HttpResponseDict]
+  """Used to retain the full HTTP response."""
 
 
 DeleteCachedContentResponseOrDict = Union[
@@ -11208,13 +11331,16 @@ _DeleteFileParametersOrDict = Union[
 class DeleteFileResponse(_common.BaseModel):
   """Response for the delete file method."""
 
-  pass
+  sdk_http_response: Optional[HttpResponse] = Field(
+      default=None, description="""Used to retain the full HTTP response."""
+  )
 
 
 class DeleteFileResponseDict(TypedDict, total=False):
   """Response for the delete file method."""
 
-  pass
+  sdk_http_response: Optional[HttpResponseDict]
+  """Used to retain the full HTTP response."""
 
 
 DeleteFileResponseOrDict = Union[DeleteFileResponse, DeleteFileResponseDict]
@@ -12281,6 +12407,10 @@ class UpscaleImageConfig(_common.BaseModel):
   http_options: Optional[HttpOptions] = Field(
       default=None, description="""Used to override HTTP request options."""
   )
+  output_gcs_uri: Optional[str] = Field(
+      default=None,
+      description="""Cloud Storage URI used to store the generated images.""",
+  )
   include_rai_reason: Optional[bool] = Field(
       default=None,
       description="""Whether to include a reason for filtered-out images in the
@@ -12320,6 +12450,9 @@ class UpscaleImageConfigDict(TypedDict, total=False):
 
   http_options: Optional[HttpOptionsDict]
   """Used to override HTTP request options."""
+
+  output_gcs_uri: Optional[str]
+  """Cloud Storage URI used to store the generated images."""
 
   include_rai_reason: Optional[bool]
   """Whether to include a reason for filtered-out images in the
@@ -14735,6 +14868,42 @@ class CreateAuthTokenParametersDict(TypedDict, total=False):
 CreateAuthTokenParametersOrDict = Union[
     CreateAuthTokenParameters, CreateAuthTokenParametersDict
 ]
+
+
+class CountTokensResult(_common.BaseModel):
+  """Local tokenizer count tokens result."""
+
+  total_tokens: Optional[int] = Field(
+      default=None, description="""The total number of tokens."""
+  )
+
+
+class CountTokensResultDict(TypedDict, total=False):
+  """Local tokenizer count tokens result."""
+
+  total_tokens: Optional[int]
+  """The total number of tokens."""
+
+
+CountTokensResultOrDict = Union[CountTokensResult, CountTokensResultDict]
+
+
+class ComputeTokensResult(_common.BaseModel):
+  """Local tokenizer compute tokens result."""
+
+  tokens_info: Optional[list[TokensInfo]] = Field(
+      default=None, description="""Lists of tokens info from the input."""
+  )
+
+
+class ComputeTokensResultDict(TypedDict, total=False):
+  """Local tokenizer compute tokens result."""
+
+  tokens_info: Optional[list[TokensInfoDict]]
+  """Lists of tokens info from the input."""
+
+
+ComputeTokensResultOrDict = Union[ComputeTokensResult, ComputeTokensResultDict]
 
 
 class CreateTuningJobParameters(_common.BaseModel):
