@@ -1,5 +1,9 @@
 # SQL Lineage Analyzer
 
+**Prototype Version**
+
+This project is an early-stage prototype for analyzing SQL data lineage using AI (Google Gemini) and Teradata database integration. The application features a Tkinter-based GUI, multi-threaded connectivity checks, and a built-in prompt editor for customizing AI instructions.
+
 A Tkinter-based GUI application that analyzes SQL files using Google's Gemini AI to generate data lineage mappings.
 
 ## Features
