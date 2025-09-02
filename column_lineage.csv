@@ -6,7 +6,9 @@ orders.orders,order_id,sales.fact_orders,order_id
 orders.orders,order_date,sales.fact_orders,order_date
 orders.orders,order_status,sales.fact_orders,order_status
 products.products,product_id,sales.fact_orders,product_id
-products.products,product_name,sales.fact_orders,product_name
+products.products,product_name,sales.fact_orders,Unknown
 products.products,product_category,sales.fact_orders,product_category
 orders.order_items,quantity,sales.fact_orders,quantity
 orders.order_items,unit_price,sales.fact_orders,unit_price
+orders.order_items,quantity,sales.fact_orders,line_total
+orders.order_items,unit_price,sales.fact_orders,line_total

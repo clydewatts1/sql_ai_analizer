@@ -1,5 +1,5 @@
 source_table,target_table
-orders.orders,sales.fact_orders
 orders.order_items,sales.fact_orders
 customers.customers,sales.fact_orders
+orders.orders,sales.fact_orders
 products.products,sales.fact_orders

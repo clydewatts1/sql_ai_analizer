@@ -270,7 +270,11 @@ class SQLAnalyzerApp(tk.Tk):
         # API Key
         ttk.Label(config_frame, text="Gemini API Key:").grid(row=0, column=0, sticky="w", padx=(0, 10))
         ttk.Entry(config_frame, textvariable=self.api_key_var, width=50, show="*").grid(row=0, column=1, sticky="ew", padx=(0, 10))
-        ttk.Button(config_frame, text="Fetch Models", command=self._fetch_and_update_models_threaded).grid(row=0, column=2)
+        
+        buttons_frame = ttk.Frame(config_frame)
+        buttons_frame.grid(row=0, column=2, sticky="w")
+        ttk.Button(buttons_frame, text="Fetch Models", command=self._fetch_and_update_models_threaded).pack(side="left")
+        ttk.Button(buttons_frame, text="Edit Prompts", command=self._open_prompts_editor).pack(side="left", padx=(5, 0))
 
         # Model selection
         ttk.Label(config_frame, text="Model:").grid(row=1, column=0, sticky="w", padx=(0, 10), pady=(10, 0))
@@ -2037,6 +2041,38 @@ How can I help you today?"""
             self._queue_gui_update(lambda: self._log_ai_interaction("=== AI Connection Test FAILED ==="))
             self._queue_gui_update(lambda: messagebox.showerror("AI Connection Failed", f"AI connection failed: {error_msg}"))
             logging.error(f"AI connection failed: {error_msg}")
+
+    def _open_prompts_editor(self):
+        try:
+            with open("prompts.yaml", "r") as f:
+                prompts_content = f.read()
+        except FileNotFoundError:
+            messagebox.showerror("Error", "prompts.yaml not found!")
+            return
+
+        prompts_window = tk.Toplevel(self)
+        prompts_window.title("Edit Prompts")
+        prompts_window.geometry("800x600")
+
+        text_area = tk.Text(prompts_window, wrap="word")
+        text_area.pack(expand=True, fill="both", padx=10, pady=10)
+        text_area.insert("1.0", prompts_content)
+
+        def save_prompts():
+            try:
+                with open("prompts.yaml", "w") as f:
+                    f.write(text_area.get("1.0", "end-1c"))
+                self.prompts = self._load_prompts() # Reload prompts
+                messagebox.showinfo("Success", "Prompts saved successfully!")
+                prompts_window.destroy()
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to save prompts: {e}")
+
+        button_frame = ttk.Frame(prompts_window)
+        button_frame.pack(fill="x", padx=10, pady=(0, 10))
+
+        ttk.Button(button_frame, text="Save", command=save_prompts).pack(side="right")
+        ttk.Button(button_frame, text="Cancel", command=prompts_window.destroy).pack(side="right", padx=(0, 5))
 
 # --- Main application entry point ---
 if __name__ == "__main__":
