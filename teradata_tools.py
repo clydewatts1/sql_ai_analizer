@@ -1,11 +1,14 @@
 import teradatasql
 import logging
 
-# This dictionary will be populated by the main application with the connection details.
-db_connection_params = {
-    "host": None,
-    "logmech": "BROWSER"
-}
+# This will be updated by the main application
+db_connection_params = {}
+
+def update_db_connection_params(params):
+    """Update the database connection parameters"""
+    global db_connection_params
+    db_connection_params.update(params)
+    logging.info(f"Updated DB connection params: host={params.get('host', 'None')}")
 
 def get_object_ddl(table_name: str) -> str:
     """Gets the DDL (Data Definition Language) for a given Teradata object (table or view).

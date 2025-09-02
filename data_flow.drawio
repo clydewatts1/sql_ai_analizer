@@ -1,1 +1,1 @@
-{'nodes': [{'id': 'dbc.tablesv', 'label': 'dbc.tablesv', 'type': 'table'}, {'id': 'aggregation', 'label': 'Aggregation', 'type': 'process'}, {'id': 'output', 'label': 'Output', 'type': 'table'}], 'edges': [{'source': 'dbc.tablesv', 'target': 'aggregation', 'label': 'databasename, all rows'}, {'source': 'aggregation', 'target': 'output', 'label': 'databasename, COUNT(*)'}]}
+Could not generate diagram.

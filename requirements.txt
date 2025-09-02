@@ -1,4 +1,6 @@
-google-genai>=2.0.0
+google-genai>=1.32.0
 teradatasql
 sqlfluff
 pyyaml
+markdown
+tkinterweb
